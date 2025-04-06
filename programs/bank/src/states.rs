@@ -4,6 +4,7 @@ use anchor_lang::prelude::*;
 #[account]
 #[derive(InitSpace)]
 pub struct BankState {
+    pub is_initialized:bool,
     pub owner:Pubkey,
     pub bump:u8
 }
@@ -11,7 +12,7 @@ pub struct BankState {
 #[account]
 #[derive(InitSpace)]
 pub struct VaultState {
-    pub is_initialize:bool,
+    pub is_initialized:bool,
     pub owner:Pubkey,
     pub token_address:Pubkey,
     pub amount:u64,
