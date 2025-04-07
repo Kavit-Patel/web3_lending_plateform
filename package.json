@@ -1,11 +1,14 @@
 {
   "license": "ISC",
   "scripts": {
+    "anchor": "cd anchor && anchor",
+    "test:local-anchor": "cross-env anchor test --skip-local-validator tests/dlp.ts",
+    "test:dev-anchor": "cross-env anchor test tests/dlp.ts",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
     "test:all": "cross-env RUST_LOG=error jest --forceExit",
     "test:bank": "cross-env RUST_LOG= jest bankrun/bank/bank_test.ts",
-    "test:multisig": "cross-env RUST_LOG= jest bankrun/multisig/multisig_test.ts",
+    "test:dlp": "cross-env RUST_LOG= jest bankrun/dlp/dlp_test.ts",
     "test:settlement": "cross-env RUST_LOG= jest bankrun/settlement/settlement_test.ts"
   },
   "dependencies": {

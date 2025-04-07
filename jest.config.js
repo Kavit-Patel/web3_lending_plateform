@@ -6,7 +6,7 @@ module.exports = {
     },
     testMatch: [
       "**/bankrun/bank/bank_test.ts",
-      "**/bankrun/multisig/multisig_test.ts",
+      "**/bankrun/dlp/dlp_test.ts",
       "**/bankrun/settlement/settlement_test.ts"
     ]
   };
