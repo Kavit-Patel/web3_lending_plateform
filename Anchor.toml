@@ -5,7 +5,7 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-[programs.devnet]
+[programs.localnet]
 bank = "46ZGHfPxd5JbtCbAnYUKXcHuoqkQQHDWQTcphxA5aeQM"
 dlp = "G7uEs9veqxboMC7kCwpnduLq57GnhKD2T1t3SqbgafQR"
 
@@ -13,7 +13,7 @@ dlp = "G7uEs9veqxboMC7kCwpnduLq57GnhKD2T1t3SqbgafQR"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

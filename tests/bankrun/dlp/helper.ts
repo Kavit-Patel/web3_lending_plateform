@@ -1,5 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Dlp } from "../../../target/types/dlp";
+import { Bank } from "../../../target/types/bank";
 import { BanksClient } from "solana-bankrun";
 import { AccountLayout } from "@solana/spl-token";
 import { BN } from "bn.js";
@@ -12,18 +13,19 @@ export async function getTokenBalance(client: BanksClient, tokenAccount: anchor.
     return new BN(data.amount.toString());
   }
 
-  export const initializeDlp = async(program:anchor.Program<Dlp>,signer:anchor.web3.Keypair) => await program.methods
-                                                                                                             .initializePlatform()
+  export const initializeDlp = async(program:anchor.Program<Dlp>,signer:anchor.web3.Keypair,platform_mint_pda:anchor.web3.PublicKey) => await program.methods
+                                                                                                             .initializePlatform(new BN(100000e6))
                                                                                                              .accounts({
                                                                                                               signer:signer.publicKey,
+                                                                                                              
                                                                                                              })
                                                                                                              .signers([signer])
                                                                                                              .rpc();
 
-// export const initializeBankAcc = async(program:anchor.Program<Bank>,signer:anchor.web3.Keypair)=> await program.methods
-//                                                                                     .initializeBank()
-//                                                                                     .accounts({
-//                                                                                         signer:signer.publicKey,
-//                                                                                     })
-//                                                                                     .signers([signer])
-//                                                                                     .rpc();
+export const initializeBankAcc = async(program:anchor.Program<Bank>,signer:anchor.web3.Keypair)=> await program.methods
+                                                                                    .initializeBank()
+                                                                                    .accounts({
+                                                                                        signer:signer.publicKey,
+                                                                                    })
+                                                                                    .signers([signer])
+                                                                                    .rpc();

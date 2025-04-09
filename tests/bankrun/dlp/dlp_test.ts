@@ -1,20 +1,23 @@
 import * as anchor from "@coral-xyz/anchor";
 const DLP_IDL = require("../../../target/idl/dlp.json")
 import {Dlp} from "../../../target/types/dlp";
+const BANK_IDL = require("../../../target/idl/bank.json")
+import {Bank} from "../../../target/types/bank";
 import { assert, expect } from "chai";
 import { describe, test } from "@jest/globals"; 
 import { BanksClient, startAnchor } from "solana-bankrun";
-// import {createMint,createAccount,mintTo} from "@solana/spl-token";
-import {createMint,createAccount,mintTo} from "spl-token-bankrun";
+import {createMint,createAccount,mintTo,getAccount} from "spl-token-bankrun";
 import { SYSTEM_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/native/system";
 import { BankrunProvider } from "anchor-bankrun";
 import NodeWallet from "@coral-xyz/anchor/dist/cjs/nodewallet";
 import { getPda } from "../utils";
-import { getTokenBalance, initializeDlp } from "./helper";
+import { getTokenBalance, initializeBankAcc, initializeDlp } from "./helper";
 import { BN } from "bn.js";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddress, getOrCreateAssociatedTokenAccount, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 describe("testing for bank ",()=>{
     let dlp_program:anchor.Program<Dlp>;
+    let bank_program:anchor.Program<Bank>;
     let provider:BankrunProvider;
     let client;
     const signer = anchor.web3.Keypair.fromSecretKey(
@@ -86,13 +89,29 @@ describe("testing for bank ",()=>{
     provider.wallet = new NodeWallet(signer);
     anchor.setProvider(provider);
     dlp_program = new anchor.Program<Dlp>(DLP_IDL,provider);
+    bank_program = new anchor.Program<Bank>(BANK_IDL,provider);
 
-    let [platformPda]=await getPda([Buffer.from("PLATFORM")],dlp_program.programId);
+
+    let [bankPda]=await getPda([Buffer.from("BANK_ACC_STATE")],bank_program.programId);
+    let [depositor1Pda]=await getPda([Buffer.from("DEPOSITOR"),depositor1.publicKey.toBuffer()],bank_program.programId);
+    // let [platformPda]=await getPda([Buffer.from("PLATFORM")],dlp_program.programId);
+    // let [vaultAccPdad]=await getPda([Buffer.from("VAULT")],dlp_program.programId);
+    // console.log("vault ",vaultAccPda.toString())
+    // console.log("vault dlp ",vaultAccPdad.toString())
+    let [platformMintPda]=anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("PLATFORM_MINT")], dlp_program.programId);
+    let [loanPda]=anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("LOAN"),new BN(1).toBuffer("le",16)], dlp_program.programId);
     // let [depositor1Pda]=await getPda([Buffer.from("DEPOSITOR"),depositor1.publicKey.toBuffer()],dlp_program.programId);
   
+    const [platformPda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("PLATFORM")],
+        dlp_program.programId
+      );
+      const platformTokenAccount = anchor.utils.token.associatedAddress({
+        mint: platformMintPda,
+        owner: platformPda
+      });
 
-
-    return {client,platformPda}
+    return {client,platformTokenAccount,platformPda,platformMintPda,bankPda,depositor1Pda,loanPda}
 
     }
     async function createMintAndTokenAccount(client,signer){
@@ -100,18 +119,100 @@ describe("testing for bank ",()=>{
         const tokenAccount = await createAccount(client,signer,token,signer.publicKey);
         await mintTo(client,signer,token,tokenAccount,signer,10000e6);
 
-        // const token = await createMint(dlp_program.provider.connection,payer,payer.publicKey,null,6);
-        // const tokenAccount = await createAccount(dlp_program.provider.connection,payer,token,payer.publicKey);
-
         return {token,tokenAccount};
     }
 
     test("Initialize Plateform",async()=>{
-        const {platformPda} = await setupTestEnvironment();
-        await initializeDlp(dlp_program,signer);
+        const {platformPda,platformMintPda} = await setupTestEnvironment();
+        const tx = await initializeDlp(dlp_program,signer,platformMintPda);
 
         const platform_acc = await dlp_program.account.platformState.fetch(platformPda);
+          const platformTokenAccountAddress = await getOrCreateAssociatedTokenAccount(dlp_program.provider.connection,signer,platformMintPda,platformPda,true);
+          const tokenAccount = await getAccount(client, platformTokenAccountAddress.address);
+          console.log("platform token mint amount  ", tokenAccount.amount);
+          
+        console.log("platform TX  ",tx);
+        console.log("platform inited ",platform_acc.isInitialized);
         console.log("platform inited ",platform_acc.isInitialized);
         console.log("platform owner",platform_acc.owner.toString());
+        console.log("platform current mint amount",platform_acc.currentMintAmount.toString());
+        console.log("platform mint",platform_acc.platformMint.mint.toString());
+        console.log("platform total supply",platform_acc.platformMint.totalSupply.toString());
     })
+    // test("deposit cpi ",async()=>{
+
+    //     const {bankPda,depositor1Pda}=await setupTestEnvironment()
+    //     await initializeBankAcc(bank_program,signer)
+    //     const {token,tokenAccount}=await createMintAndTokenAccount(client,depositor1)
+
+    //     let [vaultAccPda]=await getPda([Buffer.from("VAULT"),token.toBuffer()],bank_program.programId);
+    //     let [vaultHolderPda]=await getPda([Buffer.from("VAULT_HOLDER"),signer.publicKey.toBuffer(),token.toBuffer()],bank_program.programId);
+    //     const tx = await dlp_program.methods
+    //                                 .depositorCpi(new BN(1))
+    //                                 .accounts({
+    //                                     signer:depositor1.publicKey,
+    //                                     bankOwner:signer.publicKey,
+    //                                     bankAcc:bankPda,
+    //                                     mint:token,
+    //                                     fromTokenAccount:tokenAccount,
+    //                                     depositor:depositor1Pda,
+    //                                     vault:vaultHolderPda,
+    //                                     vaultAcc:vaultAccPda,
+    //                                 })
+    //                                 .signers([depositor1])
+    //                                 .rpc()
+    //     console.log("tx deposited cpi ",tx)
+    // })
+    test("borrow loan ",async()=>{
+
+        const {bankPda,platformTokenAccount,depositor1Pda,platformPda,platformMintPda,loanPda}=await setupTestEnvironment()
+        await initializeBankAcc(bank_program,signer)
+        await initializeDlp(dlp_program,signer,platformMintPda)
+        const {token,tokenAccount}=await createMintAndTokenAccount(client,depositor1)
+        const borrowerTokenAccount = await createAccount(client,signer,platformMintPda,depositor1.publicKey);
+
+        let [vaultAccPda]=await getPda([Buffer.from("VAULT"),token.toBuffer()],bank_program.programId);
+        let [vaultHolderPda]=await getPda([Buffer.from("VAULT_HOLDER"),signer.publicKey.toBuffer(),token.toBuffer()],bank_program.programId);
+        console.log("platformowner & signer",signer.publicKey.toBase58())
+        console.log("platform mint  pda",platformMintPda.toBase58())
+        console.log("platform acc ",platformPda.toBase58())
+        console.log("depo1 ",depositor1.publicKey.toBase58())
+        const tx = await dlp_program.methods
+                                    .borrowLoan(new BN(1),new BN(100))
+                                    .accounts({
+                                        signer:depositor1.publicKey,
+                                        platformAcc:platformPda,
+                                        platformOwner:signer.publicKey,
+                                        nftCollateral:token,
+                                        nftTokenAccount:tokenAccount,
+                                        nftHolder:vaultHolderPda,
+                                        vaultAcc:vaultAccPda,
+                                        bankOwner:signer.publicKey,
+                                        bankAcc:bankPda,
+                                        borrower:depositor1Pda,
+                                        platformMint:platformMintPda,
+                                        borrowerTokenAccount:borrowerTokenAccount,
+                                        platformMintTokenAccount:platformTokenAccount,
+                                        systemprogram:SYSTEM_PROGRAM_ID,
+                                        tokenProgram:TOKEN_PROGRAM_ID,
+                                        bankProgram:bank_program.programId,
+                                        associatedTokenProgram:ASSOCIATED_TOKEN_PROGRAM_ID
+                                        
+                                    } as any)
+                                    .signers([depositor1,signer])
+                                    .rpc().catch(e=>console.log("Error :",e))
+        console.log("tx borrow loan cpi ",tx)
+        const loan_acc = await dlp_program.account.loanState.fetch(loanPda);
+        console.log("loan amount",loan_acc.borrowedAmount.toString())
+        console.log("loan borrower",loan_acc.borrower.toString())
+        console.log("loan colletral",loan_acc.collateral.toString())
+        console.log("loan interest",loan_acc.interest.toString())
+        console.log("loan loanid",loan_acc.loanId.toString())
+        console.log("loan start time",loan_acc.startTime.toString())
+        console.log("loan end time",loan_acc.endTime.toString())
+        console.log("loan amount with interest ",loan_acc.amountWithInterest.toString())
+        const borrowerTA = await getAccount(client, borrowerTokenAccount);
+        console.log("Borrower token mint amount  ", borrowerTA.amount);
+    })
+    
 })
